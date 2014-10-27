@@ -1,4 +1,5 @@
 import numpy
+import scipy.sparse
 import warnings
 
 
@@ -22,7 +23,6 @@ class BayesianSets():
         bs.fit(np.array([[1, 0, 1], [1, 0, 0], [1, 0, 0], [0, 0, 1]]))
         ix = bs.predict([[1, 1, 0])
     """
-    #TODO: Use scipy for sparse data?
     #TODO: Use sklearn multilabel to parse labels?
 
     def __init__(self, c=2):
@@ -40,10 +40,13 @@ class BayesianSets():
         """
         Initialize BayesianSets with data X so it's prepared for querying.
 
-        :param X: Array-like, shape = [n_sets, n_items] with values 0, 1.
+        :param X: Array-like, shape = [n_items, n_sets] with values 0, 1.
         :return: object self.
         """
-        self.X = numpy.asarray(X)
+        if not scipy.sparse.isspmatrix_csr(X):
+            self.X = scipy.sparse.csr_matrix(X)
+        else:
+            self.X = X
         self.X = self._check_params()
         self.mean_X = self.X.mean(axis=0)
         self.alpha = self.c * self.mean_X
@@ -69,16 +72,20 @@ class BayesianSets():
 
         :return: X
         """
-        if numpy.any((self.X != 1) & (self.X != 0)):
+        unique_non_zero_values = numpy.unique(self.X.data)
+        if not (len(unique_non_zero_values) <= 1 and
+                unique_non_zero_values == 1):
             raise ValueError('X has values that are not 0 or 1.')
-        item_is_in_no_sets = (numpy.sum(self.X, axis=0) == 0)
-        if numpy.any(item_is_in_no_sets):
+        item_is_in_a_set = self.X.sum(axis=0) != 0
+        item_is_in_a_set_ix = numpy.where(item_is_in_a_set)[1]
+        if not numpy.all(item_is_in_a_set):
             warnings.warn("Removing items present in no sets.")
-            self.X = self.X[:, ~item_is_in_no_sets]
-        item_is_in_all_sets = self.X.all(axis=0)
-        if numpy.any(item_is_in_all_sets):
+            self.X = self.X[:, item_is_in_a_set_ix.tolist()[0]]
+        item_is_not_in_all_sets = self.X.sum(axis=0) != self.X.shape[0]
+        item_is_not_in_all_sets_ix = numpy.where(item_is_not_in_all_sets)[1]
+        if not numpy.all(item_is_not_in_all_sets):
             warnings.warn("Removing items present in all sets.")
-            self.X = self.X[:, ~item_is_in_all_sets]
+            self.X = self.X[:, item_is_not_in_all_sets_ix.tolist()[0]]
         return self.X
 
     def _compute_vectors(self, item_index):

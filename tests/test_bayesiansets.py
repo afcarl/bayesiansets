@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse
 import unittest
 import warnings
 from unittest import TestCase
@@ -44,7 +45,7 @@ class TestBayesianSets(TestCase):
         with warnings.catch_warnings(True) as w:
             bs.fit(X)
             self.assertTrue(len(w) >= 1)
-        self.assertTrue(np.allclose(bs.X, [[1, 0], [0, 1]]))
+        self.assertTrue(np.allclose(bs.X.todense(), [[1, 0], [0, 1]]))
 
         # Columns containing all ones.
         X = np.array([[1, 1, 0], [1, 0, 1]])
@@ -52,7 +53,7 @@ class TestBayesianSets(TestCase):
         with warnings.catch_warnings(True) as w:
             bs.fit(X)
             self.assertTrue(len(w) >= 1)
-        self.assertTrue(np.allclose(bs.X, [[1, 0], [0, 1]]))
+        self.assertTrue(np.allclose(bs.X.todense(), [[1, 0], [0, 1]]))
 
     def test_fit(self):
         """
@@ -76,7 +77,15 @@ class TestBayesianSets(TestCase):
         Test ordering and log score using hand-validated values.
         """
         bs = BayesianSets()
-        bs.fit(np.array(self.X))
+        bs.fit(self.X)
+        computed_ix = bs.predict([0, 1])
+        expected_ix = [0, 1, 2]
+        self.assertTrue(np.allclose(computed_ix[:3], expected_ix))
+        self.assertTrue(np.allclose(bs.log_scores_,
+                                    [-4.06, -4.41, -5.44, -6.59, -6.72, -6.72],
+                                    rtol=1E-2, atol=1E-2))
+
+        bs.fit(scipy.sparse.csr_matrix(self.X))
         computed_ix = bs.predict([0, 1])
         expected_ix = [0, 1, 2]
         self.assertTrue(np.allclose(computed_ix[:3], expected_ix))
